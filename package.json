@@ -1,16 +1,17 @@
 {
-  "name": "OpenShift-Sample-App",
+  "name": "Node-Red for M.S.V.",
   "version": "1.0.0",
-  "description": "OpenShift Sample Application",
+  "description": "Node Red on M.S.V OpenShift",
   "keywords": [
     "OpenShift",
     "Node.js",
     "application",
-    "openshift"
+    "openshift",
+    "node-red"
   ],
   "author": {
-    "name": "OpenShift",
-    "email": "ramr@example.org",
+    "name": "emarilly",
+    "email": "emmanuel.marilly@nokia.com",
     "url": "http://www.openshift.com/"
   },
   "homepage": "http://www.openshift.com/",
@@ -25,7 +26,10 @@
   },
 
   "dependencies": {
-    "express": "~3.4.4"
+    "express": "4.x",
+    "node-red": ">= 0.9",
+    "atob": "1.1.2",
+    "basic-auth-connect":"1.0.0"
   },
   "devDependencies": {},
   "bundleDependencies": [],

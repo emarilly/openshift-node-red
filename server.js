@@ -1,13 +1,10 @@
 #!/bin/env node
-//  OpenShift sample Node application
-var express = require('express');
-var fs      = require('fs');
+var http = require('http');
+var express = require("express");
+var RED = require("node-red");
+var atob = require('atob');
 
-
-/**
- *  Define the sample application.
- */
-var SampleApp = function() {
+var MyRed = function() {
 
     //  Scope.
     var self = this;
@@ -23,7 +20,7 @@ var SampleApp = function() {
     self.setupVariables = function() {
         //  Set the environment variables we need.
         self.ipaddress = process.env.OPENSHIFT_NODEJS_IP;
-        self.port      = process.env.OPENSHIFT_NODEJS_PORT || 8080;
+        self.port      = process.env.OPENSHIFT_NODEJS_PORT || 8000;
 
         if (typeof self.ipaddress === "undefined") {
             //  Log errors on OpenShift but continue w/ 127.0.0.1 - this
@@ -31,43 +28,36 @@ var SampleApp = function() {
             console.warn('No OPENSHIFT_NODEJS_IP var, using 127.0.0.1');
             self.ipaddress = "127.0.0.1";
         };
-    };
 
 
-    /**
-     *  Populate the cache.
-     */
-    self.populateCache = function() {
-        if (typeof self.zcache === "undefined") {
-            self.zcache = { 'index.html': '' };
+
+        // Create the settings object
+        self.redSettings = {
+            httpAdminRoot:"/",
+            httpNodeRoot: "/api",
+            userDir: process.env.OPENSHIFT_DATA_DIR
+        };
+
+        if (typeof self.redSettings.userDir === "undefined") {
+            console.warn('No OPENSHIFT_DATA_DIR var, using ./');
+            self.redSettings.userDir = "./";
         }
-
-        //  Local cache for static content.
-        self.zcache['index.html'] = fs.readFileSync('./index.html');
     };
 
-
-    /**
-     *  Retrieve entry (content) from cache.
-     *  @param {string} key  Key identifying content to retrieve from cache.
-     */
-    self.cache_get = function(key) { return self.zcache[key]; };
-
-
-    /**
+     /**
      *  terminator === the termination handler
      *  Terminate server on receipt of the specified signal.
      *  @param {string} sig  Signal to terminate on.
      */
     self.terminator = function(sig){
         if (typeof sig === "string") {
-           console.log('%s: Received %s - terminating sample app ...',
+           console.log('%s: Received %s - terminating app ...',
                        Date(Date.now()), sig);
+            RED.stop();
            process.exit(1);
         }
         console.log('%s: Node server stopped.', Date(Date.now()) );
     };
-
 
     /**
      *  Setup termination handlers (for exit and a list of signals).
@@ -84,7 +74,6 @@ var SampleApp = function() {
         });
     };
 
-
     /*  ================================================================  */
     /*  App server functions (main app logic here).                       */
     /*  ================================================================  */
@@ -99,13 +88,7 @@ var SampleApp = function() {
             var link = "http://i.imgur.com/kmbjB.png";
             res.send("<html><body><img src='" + link + "'></body></html>");
         };
-
-        self.routes['/'] = function(req, res) {
-            res.setHeader('Content-Type', 'text/html');
-            res.send(self.cache_get('index.html') );
-        };
     };
-
 
     /**
      *  Initialize the server (express) and create the routes and register
@@ -113,7 +96,31 @@ var SampleApp = function() {
      */
     self.initializeServer = function() {
         self.createRoutes();
-        self.app = express.createServer();
+
+        // Create an Express app
+        self.app = express();
+
+        // Create a server
+        self.server = http.createServer(self.app);
+
+        //setup basic authentication
+        var basicAuth = require('basic-auth-connect');
+        self.app.use(basicAuth(function(user, pass) {
+            return user === 'test' && pass === atob('dGVzdA==');
+        }));
+
+        // Initialise the runtime with a server and settings
+        RED.init(self.server, self.redSettings);
+        console.log('%s is the userDir for RED', self.redSettings.userDir);
+
+        // Serve the editor UI from /red
+        self.app.use(self.redSettings.httpAdminRoot,RED.httpAdmin);
+
+        // Serve the http nodes UI from /api
+        self.app.use(self.redSettings.httpNodeRoot,RED.httpNode);
+
+        // Add a simple route for static content served from 'public'
+        //self.app.use("/",express.static("public"));
 
         //  Add handlers for the app (from the routes).
         for (var r in self.routes) {
@@ -121,39 +128,35 @@ var SampleApp = function() {
         }
     };
 
-
     /**
      *  Initializes the sample application.
      */
     self.initialize = function() {
         self.setupVariables();
-        self.populateCache();
         self.setupTerminationHandlers();
 
         // Create the express server and routes.
         self.initializeServer();
     };
 
-
     /**
      *  Start the server (starts up the sample application).
      */
     self.start = function() {
         //  Start the app on the specific interface (and port).
-        self.app.listen(self.port, self.ipaddress, function() {
+        self.server.listen(self.port,self.ipaddress, function() {
             console.log('%s: Node server started on %s:%d ...',
                         Date(Date.now() ), self.ipaddress, self.port);
         });
+
+        // Start the runtime
+        RED.start();
     };
-
-};   /*  Sample Application.  */
-
-
+}
 
 /**
  *  main():  Main code.
  */
-var zapp = new SampleApp();
-zapp.initialize();
-zapp.start();
-
+var red = new MyRed();
+red.initialize();
+red.start();
